@@ -182,7 +182,7 @@ function endGame() {
     isPlaying = false;
     clearInterval(gameInterval);
     clearInterval(timerInterval);
-    finalScoreEl.innerText = SCORE: ${score};
+    finalScoreEl.innerText =  `SCORE: ${score}`;
     gameOverScreen.classList.remove('hidden');
 }
 // 簡単な効果音（Web Audio API）
