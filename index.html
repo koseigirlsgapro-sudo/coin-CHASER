@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>平成レトロ★コインチェイサー</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=M+PLUS+Rounded+1c:wght@700;900&display=swap');
+        body {
+            background-color: #ff9ee2;
+            background-image: 
+                radial-gradient(#00ffff 15%, transparent 16%),
+                radial-gradient(#ffff00 15%, transparent 16%);
+            background-size: 60px 60px;
+            background-position: 0 0, 30px 30px;
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            user-select: none;
+        }
+        h1 {
+            color: #fff;
+            text-shadow: 3px 3px 0px #ff007f, -3px -3px 0px #00ffff;
+            margin: 10px 0;
+            font-size: 28px;
+            letter-spacing: 2px;
+        }
+        #game-container {
+            position: relative;
+            border: 6px solid #fff;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3), inset 0 0 10px rgba(0,0,0,0.2);
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+        }
+        canvas {
+            display: block;
+            background: linear-gradient(to bottom, #2b1055, #7597de);
+            image-rendering: pixelated; /* ドット絵感を強調 */
+        }
+        .ui-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            color: #fff;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 14px;
+            text-shadow: 2px 2px #000;
+            pointer-events: none;
+        }
+        #game-over-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+        }
+        .retro-btn {
+            margin-top: 15px;
+            padding: 10px 20px;
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+            font-weight: 900;
+            font-size: 18px;
+            color: #fff;
+            background: #ff007f;
+            border: 3px solid #fff;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #99004c;
+            transition: transform 0.1s;
+        }
+        .retro-btn:active {
+            transform: translateY(4px);
+            box-shadow: none;
+        }
+        .controls-hint {
+            margin-top: 10px;
+            color: #fff;
+            background: rgba(0,0,0,0.5);
+            padding: 6px 15px;
+            border-radius: 15px;
+            font-size: 14px;
+        }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <h1>★ HEISEI RUNNER ★</h1>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        <div class="ui-panel">
+            <div>SCORE: <span id="score">0000</span></div>
+            <div>TIME: <span id="time">30</span>s</div>
+        </div>
+        
+        <div id="game-over-screen">
+            <h2 id="over-title" style="color: #00ffff; text-shadow: 2px 2px #ff007f; margin:0;">GAME OVER</h2>
+            <p id="final-score" style="font-size: 20px; font-weight: bold; margin: 15px 0;">SCORE: 0</p>
+            <button class="retro-btn" onclick="startGame()">もういちど遊ぶ</button>
+        </div>
+    </div>
+    <div class="controls-hint">操作: 矢印キー [←][→][↑][↓] または WASD</div>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const timeEl = document.getElementById('time');
+const gameOverScreen = document.getElementById('game-over-screen');
+const finalScoreEl = document.getElementById('final-score');
+// ゲーム設定
+let score = 0;
+let timeLeft = 30;
+let gameInterval;
+let timerInterval;
+let isPlaying = false;
+// キー入力状態
+const keys = {};
+// プレイヤー設定 (平成ドットキャラ風)
+const player = {
+    x: 180,
+    y: 180,
+    width: 24,
+    height: 24,
+    speed: 4,
+    animFrame: 0
+};
+// コイン設定
+let coins = [];
+const maxCoins = 5;
+// イベントリスカナ
+window.addEventListener('keydown', e => keys[e.key] = true);
+window.addEventListener('keyup', e => keys[e.key] = false);
+function spawnCoin() {
+    return {
+        x: Math.floor(Math.random() * (canvas.width - 20) + 10),
+        y: Math.floor(Math.random() * (canvas.height - 40) + 30),
+        size: 12,
+        pulse: 0
+    };
+}
+function initCoins() {
+    coins = [];
+    for (let i = 0; i < maxCoins; i++) {
+        coins.push(spawnCoin());
+    }
+}
+function startGame() {
+    score = 0;
+    timeLeft = 30;
+    player.x = 180;
+    player.y = 180;
+    scoreEl.innerText = '0000';
+    timeEl.innerText = timeLeft;
+    gameOverScreen.classList.add('hidden');
+    isPlaying = true;
+    initCoins();
+    clearInterval(gameInterval);
+    clearInterval(timerInterval);
+    // 1秒ごとのタイマー
+    timerInterval = setInterval(() => {
+        if (!isPlaying) return;
+        timeLeft--;
+        timeEl.innerText = timeLeft;
+        if (timeLeft <= 0) {
+            endGame();
+        }
+    }, 1000);
+    // ゲームループ (約60fps)
+    gameInterval = setInterval(gameLoop, 1000 / 60);
+}
+function endGame() {
+    isPlaying = false;
+    clearInterval(gameInterval);
+    clearInterval(timerInterval);
+    finalScoreEl.innerText = SCORE: ${score};
+    gameOverScreen.classList.remove('hidden');
+}
+// 簡単な効果音（Web Audio API）
+function playCoinSound() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        osc.type = 'square'; // レトロピコピコ音
+        osc.frequency.setValueAtTime(987.77, audioCtx.currentTime); // B5
+        osc.frequency.setValueAtTime(1318.51, audioCtx.currentTime + 0.08); // E6
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.2);
+    } catch(e) {}
+}
+function update() {
+    // プレイヤー移動
+    let moving = false;
+    if (keys['ArrowUp'] || keys['w'] || keys['W']) { player.y -= player.speed; moving = true; }
+    if (keys['ArrowDown'] || keys['s'] || keys['S']) { player.y += player.speed; moving = true; }
+    if (keys['ArrowLeft'] || keys['a'] || keys['A']) { player.x -= player.speed; moving = true; }
+    if (keys['ArrowRight'] || keys['d'] || keys['D']) { player.x += player.speed; moving = true; }
+    if (moving) player.animFrame++;
+    // 画面外はみ出し防止
+    player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+    player.y = Math.max(20, Math.min(canvas.height - player.height, player.y));
+    // コインとの当たり判定
+    coins.forEach((coin, index) => {
+        coin.pulse += 0.1;
+        // 簡易円判定
+        const dist = Math.hypot((player.x + player.width/2) - coin.x, (player.y + player.height/2) - coin.y);
+        if (dist < player.width/2 + coin.size) {
+            // ゲット！
+            score += 100;
+            scoreEl.innerText = String(score).padStart(4, '0');
+            playCoinSound();
+            coins[index] = spawnCoin(); // 新しいコイン生成
+        }
+    });
+}
+function draw() {
+    // 画面クリア（グリッド付きレトロ背景）
+    ctx.fillStyle = '#110022';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // グリッド線（平成Vaporwave/レトロゲーム風）
+    ctx.strokeStyle = 'rgba(255, 0, 128, 0.15)';
+    ctx.lineWidth = 1;
+    for(let x = 0; x < canvas.width; x += 20) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+    }
+    for(let y = 0; y < canvas.height; y += 20) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    }
+    // コイン（黄色い回転ドット風）の描画
+    coins.forEach(coin => {
+        const scale = Math.sin(coin.pulse) * 3;
+        ctx.fillStyle = '#ffea00';
+        ctx.beginPath();
+        ctx.arc(coin.x, coin.y, coin.size + scale/2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ff9100';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    });
+    // プレイヤーの描画 (平成風のドットドールキャラ)
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    // アニメーション用の上下揺れ
+    const bounce = Math.floor(player.animFrame / 10) % 2 === 0 ? 0 : -2;
+    // 髪（ドット風ピンクツインテール）
+    ctx.fillStyle = '#ff007f';
+    ctx.fillRect(0, 2 + bounce, 24, 10);
+    ctx.fillRect(-2, 6 + bounce, 6, 12); // 左髪
+    ctx.fillRect(20, 6 + bounce, 6, 12); // 右髪
+    // 顔
+    ctx.fillStyle = '#ffdfc4';
+    ctx.fillRect(4, 6 + bounce, 16, 10);
+    // 目 (平成初期のドット目)
+    ctx.fillStyle = '#000';
+    ctx.fillRect(6, 9 + bounce, 3, 4);
+    ctx.fillRect(15, 9 + bounce, 3, 4);
+    // 服（水色セーラー風）
+    ctx.fillStyle = '#00ffff';
+    ctx.fillRect(4, 16 + bounce, 16, 8);
+    // リボン
+    ctx.fillStyle = '#ff0055';
+    ctx.fillRect(10, 16 + bounce, 4, 3);
+    ctx.restore();
+}
+function gameLoop() {
+    if (!isPlaying) return;
+    update();
+    draw();
+}
+// 初回起動
+startGame();
+</script>
+</body>
+</html>
+
